@@ -53,7 +53,7 @@ subjects:
   namespace: kube-system
 EOF
 
-token=$(kubectl -n kube-system create token admin-user)
+token=$(kubectl -n kube-system create token admin-user --duration 24h)
 
     echo "args $args"
     echo "Using $endpoint"
