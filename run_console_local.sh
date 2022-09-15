@@ -30,32 +30,6 @@ run_ocp_console_image (){
     secretname=$(kubectl get serviceaccount default --namespace=kube-system -o jsonpath='{.secrets[0].name}')
     endpoint=$(kubectl config view -o json | jq '{myctx: .["current-context"], ctxs: .contexts[], clusters: .clusters[]}' | jq 'select(.myctx == .ctxs.name)' | jq 'select(.ctxs.context.cluster ==  .clusters.name)' | jq '.clusters.cluster.server' -r)
 
-cat <<EOF | kubectl apply -f - 
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: admin-user
-  namespace: kube-system
-EOF
-
-cat <<EOF | kubectl apply -f -
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: admin-user
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: admin-user
-  namespace: kube-system
-EOF
-
-token=$(kubectl -n kube-system create token admin-user)
-
-    echo "args $args"
     echo "Using $endpoint"
     $POD_MANAGER run -d --rm $args \
       -e BRIDGE_USER_AUTH="disabled" \
@@ -63,7 +37,7 @@ token=$(kubectl -n kube-system create token admin-user)
       -e BRIDGE_K8S_MODE_OFF_CLUSTER_ENDPOINT="$endpoint" \
       -e BRIDGE_K8S_MODE_OFF_CLUSTER_SKIP_VERIFY_TLS=true \
       -e BRIDGE_K8S_AUTH="bearer-token" \
-      -e BRIDGE_K8S_AUTH_BEARER_TOKEN="$token" \
+      -e BRIDGE_K8S_AUTH_BEARER_TOKEN="$(kubectl get secret "$secretname" --namespace=kube-system -o template --template='{{.data.token}}' | base64 --decode)" \
       quay.io/openshift/origin-console:latest > /dev/null 2>&1 &
 }
 
@@ -75,7 +49,6 @@ verify_ocp_console_image (){
         echo "${GREEN}The OLM is accessible via web console at:${RESET}"
         echo "${GREEN}http://localhost:9000/${RESET}"
         echo "${GREEN}Press Ctrl-C to quit${RESET}";
-        echo "container_id $container_id"
         $POD_MANAGER attach "$container_id"
         exit 0
       fi
